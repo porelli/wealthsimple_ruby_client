@@ -1,0 +1,29 @@
+---
+# The data contained in this config file is extracted from the official app and the website. It's not meant to be changed by end users.
+
+token_body:
+  scope: 'invest.read' # cash account requires 'invest.read'. Other available scopes are: 'invest.write', 'trade.read', 'trade.write', 'tax.read' and 'tax.write'
+  client_id: '4da53ac2b03225bed1550eba8e4611e086c7b905a3855e6ed12ea08c246758fa' # from the website
+  otp_sms_as_voice: false
+  otp_resend_request: false
+  skip_provision: true
+
+token_headers:
+  x-wealthsimple-client: "@wealthsimple/wealthsimple"
+  x-ws-profile: "trade"
+  accept: "application/json"
+  x-ws-session-id: ""
+  content-type: "application/json"
+  x-ws-locale: "en-CA"
+
+graphql_headers:
+  x-ws-profile: 'invest'
+  x-ws-unified: 'true'
+  x-ws-locale: 'en-CA'
+
+common_headers:
+  x-platform-os: 'android'
+  x-platform-version: '29'
+  x-app-version: '2.74.0'
+  x-app-build-number: '7244'
+  user-agent: 'Wealthsimple Trade android v2.74.0 (7244) c100'
