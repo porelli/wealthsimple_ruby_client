@@ -11,6 +11,8 @@ class WealthSimpleClient
   # import the file containing all the methods able to interpret appropriately the results from the queries
   require_relative 'items'
 
+  FETCH_ACTIVITY_LIST_API_CUT_OFF_DAY = Date.parse('2023-04-01')
+
   # to initialize, we always require to input username, password and otp
   def initialize(otp: nil, username: nil, password: nil, access_token: nil)
     # check for mandatory parameters if we are not using cached data
@@ -100,8 +102,17 @@ class WealthSimpleClient
 
     # send the GQL query
     response = @graphql_client.post('/graphql') do |req|
-      # add page token if necessary, there are two tokens because there are two separate implementations
-      body[:variables][:after]  = page   if page
+      # add page token if necessary, there are two tokens and three different names because there are two separate implementations with different variables
+      if page
+        if query == 'fetch_activity_list_query'
+          # only 'fetch_activity_list_query' uses cursor as variable
+          body[:variables][:cursor] = page
+        else
+          # all the other APIs with the cursor use 'after'
+          body[:variables][:after] = page
+        end
+      end
+      # with the exception of some other APIs that use 'offset'!
       body[:variables][:offset] = offset if offset
       # ensure the body for the POST is in JSON format
       req.body = body.to_json
@@ -154,14 +165,14 @@ class WealthSimpleClient
   private_methods def get_data
     # we don't need to retrieve the balance but probably the user doesn't know their internal cash account ID, this helps retrieving it programmatically
     submit_query = {
-      query: 'cash_account_balance',
+      query: 'cash_account_balance_query',
       parameters: {}
     }
     cash_account_balance = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
     cash_account = cash_account_balance['id']
 
     submit_query = {
-      query: 'list_activities_for_account',
+      query: 'list_activities_for_account_query',
       parameters: {
         accountId: cash_account,
         futureDateString: (Date.today + 2).strftime('%Y-%m-%d')
@@ -170,7 +181,7 @@ class WealthSimpleClient
     list_activities_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
     submit_query = {
-      query: 'list_deposits_for_account',
+      query: 'list_deposits_for_account_query',
       parameters: {
         accountId: cash_account
       }
@@ -178,7 +189,7 @@ class WealthSimpleClient
     list_deposits_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
     submit_query = {
-      query: 'list_withdrawals_for_account',
+      query: 'list_withdrawals_for_account_query',
       parameters: {
         accountId: cash_account
       }
@@ -186,7 +197,7 @@ class WealthSimpleClient
     list_withdrawals_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
         
     # submit_query = {
-    #   query: 'list_pending_internal_transfers_for_account',
+    #   query: 'list_pending_internal_transfers_for_account_query',
     #   parameters: {
     #     accountId: cash_account
     #   }
@@ -194,7 +205,7 @@ class WealthSimpleClient
     # list_pending_internal_transfers_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
         
     # submit_query = {
-    #   query: 'cross_product_account_details',
+    #   query: 'cross_product_account_details_query',
     #   parameters: {
     #     userId: "ENV['ws_user_id']" # TODO: IMPORTANT: userId should be found programmatically. This must arrive coded or at an earlier initialisation stage as it is not visible in the flow
     #   }
@@ -202,7 +213,7 @@ class WealthSimpleClient
     # cross_product_account_details = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
     submit_query = {
-      query: 'spend_transactions',
+      query: 'spend_transactions_query',
       parameters: {
         accountId: cash_account
       }
@@ -218,7 +229,7 @@ class WealthSimpleClient
     search_funding_intents_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
     submit_query = {
-      query: 'payments',
+      query: 'payments_query',
       parameters: {}
     }
     payments = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
@@ -232,6 +243,15 @@ class WealthSimpleClient
     }
     fetch_interest_payout_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
+    submit_query = {
+      query: 'fetch_activity_list_query',
+      parameters: {
+        accountIds: [cash_account],
+        endDate: Time.now.utc.strftime('%FT%T.%LZ')
+      }
+    }
+    fetch_activity_list_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
+
     # returning results using the old rocket syntax to maintain compatibility with cache and consistency with the rest of the content
     {
       'cash_account_balance' => cash_account_balance,
@@ -241,9 +261,10 @@ class WealthSimpleClient
       # 'list_pending_internal_transfers_for_account' => list_pending_internal_transfers_for_account,
       # 'cross_product_account_details' => cross_product_account_details,
       'spend_transactions' => spend_transactions,
-      'search_funding_intents_query' => search_funding_intents_query,
-      'fetch_interest_payout_query' => fetch_interest_payout_query,
-      'payments' => payments
+      'search_funding_intents' => search_funding_intents_query,
+      'fetch_interest_payout' => fetch_interest_payout_query,
+      'payments' => payments,
+      'fetch_activity_list' => fetch_activity_list_query
     }
   end
 
@@ -263,17 +284,21 @@ class WealthSimpleClient
 
     # processing the data to extract the relevant info. Reversing the arrays to get an ordering similar to what we get on the app when the dates are the same, mostly helpful to debug
     nodes = []
-    nodes += data_hash.dig('list_activities_for_account')&.dig('paginatedActivities')&.dig('results')&.map { |item| list_activities_for_account_process(item: item) }.reverse
-    nodes += data_hash.dig('list_deposits_for_account')&.dig('deposits')&.dig('results')&.map              { |item| list_deposits_for_account_process(item: item) }.reverse
-    nodes += data_hash.dig('list_withdrawals_for_account')&.dig('results')&.map                            { |item| list_withdrawals_for_account_process(item: item) }.reverse
+    nodes += data_hash.dig('list_activities_for_account')&.dig('paginatedActivities')&.dig('results')&.map                { |item| list_activities_for_account_process(item: item) }.reverse
+    nodes += data_hash.dig('list_deposits_for_account')&.dig('deposits')&.dig('results')&.map                             { |item| list_deposits_for_account_process(item: item) }.reverse
+    nodes += data_hash.dig('list_withdrawals_for_account')&.dig('results')&.map                                           { |item| list_withdrawals_for_account_process(item: item) }.reverse
     # nodes += data_hash.dig('list_pending_internal_transfers_for_account').dig('paginatedActivities').dig('results').map { list_pending_internal_transfers_for_account_process(item: item) } } # TODO: not implemented/needed, it seems returning redundant data
-    nodes += data_hash.dig('spend_transactions')&.dig('nodes')&.map                                        { |item| spend_transactions_process(item: item) }.flatten.reverse # this can generate array of hashes and needs to be flatten
-    nodes += data_hash.dig('search_funding_intents_query')&.dig('edges')&.map                              { |item| search_funding_intents_query_process(item: item.dig('node')) }.reverse
-    nodes += data_hash.dig('fetch_interest_payout_query')&.dig('paginatedActivities')&.dig('results')&.map { |item| fetch_interest_payout_query_process(item: item) }.reverse # this is fetch_interest_payout_query but returns data under 'account'
-    nodes += data_hash.dig('payments')&.dig('nodes')&.map                                                  { |item| payments_process(item: item) }.reverse
+    nodes += data_hash.dig('spend_transactions')&.dig('nodes')&.map                                                       { |item| spend_transactions_process(item: item) }.flatten.reverse # this can generate array of hashes and needs to be flatten
+    nodes += data_hash.dig('search_funding_intents')&.dig('edges')&.map                                                   { |item| search_funding_intents_query_process(item: item.dig('node')) }.reverse
+    nodes += data_hash.dig('fetch_interest_payout')&.dig('paginatedActivities')&.dig('results')&.map                      { |item| fetch_interest_payout_query_process(item: item) }.reverse # this is fetch_interest_payout_query but returns data under 'account'
+    nodes += data_hash.dig('payments')&.dig('nodes')&.map                                                                 { |item| payments_process(item: item) }.reverse
+    nodes += data_hash.dig('fetch_activity_list')&.dig('edges')&.map                                                      { |item| fetch_activity_list_query_process(item: item.dig('node')) }.reverse
+
+    # TODO: We should add this check directly in the items processing AND stop the API fetch pagination once we pass the cutoff
+    nodes.map! { |node| (Date.parse(node[:alternative_date].to_s) >= FETCH_ACTIVITY_LIST_API_CUT_OFF_DAY) && node[:source_api] == 'fetch_activity_list_query' ? node : (Date.parse(node[:alternative_date].to_s) < FETCH_ACTIVITY_LIST_API_CUT_OFF_DAY) && node[:source_api] != 'fetch_activity_list_query' ? node : nil }
 
     # sort by date in place
-    nodes.sort_by! { |node| node[:alternative_date] }
+    nodes.compact!.sort_by! { |node| node[:alternative_date] }
 
     # get all the possible columns for the data export
     columns = nodes.map { |item| item.transform_keys(&:to_s).keys }.flatten.uniq

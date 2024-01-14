@@ -1,4 +1,4 @@
-def list_activities_for_account(accountId:, futureDateString:)
+def list_activities_for_account_query(accountId:, futureDateString:)
   {
     "operationName": "ListActivitiesForAccount",
     "query": "query ListActivitiesForAccount($accountId: ID!, $offset: Int, $limit: Int, $types: [String!], $sortOrder: SortOrder, $sortBy: PaginatedActivitySortBy, $futureDateString: String!) {\n  account(id: $accountId) {\n    id\n    paginatedActivities(\n      offset: $offset\n      limit: $limit\n      types: $types\n      process_date_start: \"2014-01-01\"\n      effective_date_start: \"2014-01-01\"\n      process_date_end: $futureDateString\n      effective_date_end: $futureDateString\n      sort_order: $sortOrder\n      sort_by: $sortBy\n    ) {\n      offset\n      total_count\n      results {\n        id\n        type\n        sub_type\n        effective_date\n        process_date\n        reference_id\n        net_cash {\n          amount\n          currency\n          __typename\n        }\n        description\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
@@ -22,7 +22,7 @@ def list_activities_for_account(accountId:, futureDateString:)
   }
 end
 
-def cash_account_balance
+def cash_account_balance_query
   {
     "operationName": "CashAccountBalance",
     "query": "query CashAccountBalance($accountId: ID) {\n  cashAccount(id: $accountId) {\n    id\n    spendingBalance\n    __typename\n  }\n}\n",
@@ -32,7 +32,7 @@ def cash_account_balance
   }
 end
 
-def list_deposits_for_account(accountId:)
+def list_deposits_for_account_query(accountId:)
   {
     "operationName": "ListDepositsForAccount",
     "query": "query ListDepositsForAccount($accountId: ID!, $offset: Int, $limit: Int, $statuses: [DepositStatus], $includeCancelled: Boolean) {\n  account(id: $accountId) {\n    id\n    deposits(\n      offset: $offset\n      limit: $limit\n      statuses: $statuses\n      include_cancelled: $includeCancelled\n    ) {\n      offset\n      total_count\n      results {\n        id\n        status\n        display_state\n        cancellable\n        value {\n          amount\n          currency\n          __typename\n        }\n        post_dated\n        created_at\n        completed_at\n        settled_at\n        reject_reason\n        external_reference_id\n        estimated_settlement_date\n        instant_value {\n          amount\n          __typename\n        }\n        source {\n          __typename\n          ... on BankAccountOwner {\n            bank_account {\n              id\n              __typename\n            }\n            __typename\n          }\n          ... on PaymentCard {\n            last4\n            nickname\n            __typename\n          }\n        }\n        card_transaction {\n          approval_code\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
@@ -51,7 +51,7 @@ def list_deposits_for_account(accountId:)
   }
 end
 
-def list_withdrawals_for_account(accountId:)
+def list_withdrawals_for_account_query(accountId:)
   {
     "operationName": "ListWithdrawalsForAccount",
     "query": "query ListWithdrawalsForAccount($accountId: String!, $offset: Int, $limit: Int, $statuses: [FundsTransferStatus], $includeCancelled: Boolean) {\n  search_funds_transfers(\n    account_id: $accountId\n    offset: $offset\n    limit: $limit\n    status: $statuses\n    include_cancelled: $includeCancelled\n    typename: Withdrawal\n  ) {\n    offset\n    total_count\n    results {\n      id\n      status\n      cancellable\n      value {\n        amount\n        currency\n        __typename\n      }\n      destination {\n        ...SourceOrDestinationDetails\n        __typename\n      }\n      source {\n        ...SourceOrDestinationDetails\n        __typename\n      }\n      card_transaction {\n        approval_code\n        __typename\n      }\n      external_reference_id\n      post_dated\n      created_at\n      completed_at\n      estimated_settlement_date\n      ... on Withdrawal {\n        reject_reason\n        type\n        reason\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment SourceOrDestinationDetails on FundingSourceOrDestinationUnion {\n  __typename\n  ... on Account {\n    id\n    __typename\n  }\n  ... on BankAccountOwner {\n    bank_account {\n      id\n      __typename\n    }\n    __typename\n  }\n  ... on PaymentCard {\n    id\n    card_type\n    last4\n    nickname\n    __typename\n  }\n}\n",
@@ -71,7 +71,7 @@ def list_withdrawals_for_account(accountId:)
   }
 end
 
-def list_pending_internal_transfers_for_account(accountId:)
+def list_pending_internal_transfers_for_account_query(accountId:)
   {
     "operationName": "ListPendingInternalTransfersForAccount",
     "query": "query ListPendingInternalTransfersForAccount($accountId: ID!) {\n  accountByAccountId(accountId: $accountId) {\n    id\n    incomingTransfers: incoming_internal_transfers {\n      results {\n        amount\n        currency\n        expectedCompletionDate: expected_completion_date\n        id\n        instantEligibility: instant_eligibility {\n          status\n          __typename\n        }\n        postDated: post_dated\n        sourceAccount: source_account {\n          id\n          __typename\n        }\n        status\n        transferType: transfer_type\n        __typename\n      }\n      __typename\n    }\n    outgoingTransfers: outgoing_internal_transfers {\n      results {\n        amount\n        currency\n        expectedCompletionDate: expected_completion_date\n        id\n        instantEligibility: instant_eligibility {\n          status\n          __typename\n        }\n        postDated: post_dated\n        destinationAccount: destination_account {\n          id\n          __typename\n        }\n        status\n        transferType: transfer_type\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
@@ -81,7 +81,7 @@ def list_pending_internal_transfers_for_account(accountId:)
   }
 end
 
-def cross_product_account_details(userId:)
+def cross_product_account_details_query(userId:)
   {
     "operationName": "CrossProductAccountDetails",
     "query": "query CrossProductAccountDetails($userId: ID!) {\n  accountsByUserId(userId: $userId) {\n    accountOwners {\n      accountNickname\n      __typename\n    }\n    branch\n    currency\n    id\n    type\n    __typename\n  }\n}\n",
@@ -91,7 +91,7 @@ def cross_product_account_details(userId:)
   }
 end
 
-def spend_transactions(accountId:)
+def spend_transactions_query(accountId:)
   {
     "operationName": "SpendTransactions",
     "query": "query SpendTransactions($first: Int, $after: String, $accountId: String!) {\n  spendTransactions(first: $first, after: $after, accountId: $accountId) {\n    nodes {\n      id\n      postedAt\n      merchantName\n      status\n      amount\n      hasReward\n      rewardAmount\n      rewardCanonicalId\n      rewardPayoutCustodianAccountId\n      rewardPayoutCustodianAccountType\n      rewardPayoutSecurityId\n      rewardPayoutType\n      roundupAmount\n      __typename\n    }\n    pageInfo {\n      startCursor\n      endCursor\n      hasNextPage\n      hasPreviousPage\n      __typename\n    }\n    __typename\n  }\n}\n",
@@ -114,7 +114,7 @@ def search_funding_intents_query(accountId:)
   }
 end
 
-def payments
+def payments_query
   {
     "operationName": "Payments",
     "query": "query Payments($first: Int, $after: String, $statuses: [String!], $opposingContactIds: [ID!], $opposingUserIds: [ID!]) {\n  p2pPayments(\n    first: $first\n    after: $after\n    statuses: $statuses\n    opposingContactIds: $opposingContactIds\n    opposingUserIds: $opposingUserIds\n  ) {\n    nodes {\n      ...Payment\n      __typename\n    }\n    pageInfo {\n      startCursor\n      endCursor\n      hasNextPage\n      hasPreviousPage\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment Payment on P2PPayment {\n  id\n  __typename\n  createdAt\n  amount\n  status\n  type\n  senderContact {\n    ...Contact\n    __typename\n  }\n  receiverContact {\n    ...Contact\n    __typename\n  }\n  requestMessage\n  initiateMessage\n  acceptMessage\n  cancelledBy\n  fundsAvailable\n  updatedAt\n  acceptableExternallyAs\n  transactionMetadata {\n    securityQuestion\n    securityAnswer\n    firstName\n    lastName\n    name\n    autoDeposit\n    fundingIntentId\n    __typename\n  }\n}\n\nfragment Contact on P2PContact {\n  id\n  identifier\n  identifierType\n  name\n  telephoneHash\n  channelId\n  __typename\n  contactee {\n    ...Profile\n    __typename\n  }\n}\n\nfragment Profile on P2PProfile {\n  __typename\n  id\n  name\n  handle\n  imageUrl\n  color\n  telephoneHash\n}\n",
@@ -133,6 +133,76 @@ def fetch_interest_payout_query(accountId:, futureDateString:)
       "futureDateString": futureDateString, #"2023-03-20", # TODO: the purpose of this field is unclear, from the conversation flow it appears to be +2 days from the current date
       "sortBy": "process_date",
       "sortOrder": "desc"
+    }
+  }
+end
+
+def fetch_activity_list_query(accountIds:, endDate:)
+  {
+    "operationName": "FetchActivityList",
+    "variables": {
+      "accountIds": accountIds, # [ "", "" ]
+      "types": [
+        "AFFILIATE",
+        "CRYPTO_BUY",
+        "CRYPTO_SELL",
+        "CRYPTO_TRANSFER",
+        "CRYPTO_STAKING_REWARD",
+        "DEPOSIT",
+        "DIVIDEND",
+        "DIY_BUY",
+        "DIY_SELL",
+        "FEE",
+        "FUNDS_CONVERSION",
+        "GROUP_CONTRIBUTION",
+        "INTEREST",
+        "INTERNAL_TRANSFER",
+        "INSTITUTIONAL_TRANSFER_INTENT",
+        "LEGACY_INTERNAL_TRANSFER",
+        "LEGACY_TRANSFER",
+        "MANAGED_BUY",
+        "MANAGED_SELL",
+        "NON_RESIDENT_TAX",
+        "OPTIONS_BUY",
+        "OPTIONS_SELL",
+        "OPTIONS_EXERCISE",
+        "OPTIONS_EXPIRY",
+        "P2P_PAYMENT",
+        "PREPAID_SPEND",
+        "PROMOTION",
+        "STOCK_DIVIDEND",
+        "REFUND",
+        "REIMBURSEMENT",
+        "RESP_GRANT",
+        "SPEND",
+        "WITHDRAWAL",
+        "WITHHOLDING_TAX",
+        "WRITE_OFF"
+      ],
+      "endDate": endDate, # "2024-01-14T04:59:59.999Z"
+      "first": 50
+    },
+    "query": "query FetchActivityList($first: Int!, $cursor: Cursor, $accountIds: [String!], $types: [ActivityFeedItemType!], $subTypes: [ActivityFeedItemSubType!], $endDate: Datetime!, $securityIds: [String], $startDate: Datetime, $legacyStatuses: [String]) {\n  activities(\n    first: $first\n    after: $cursor\n    accountIds: $accountIds\n    types: $types\n    subTypes: $subTypes\n    endDate: $endDate\n    securityIds: $securityIds\n    startDate: $startDate\n    legacyStatuses: $legacyStatuses\n  ) {\n    edges {\n      node {\n        ...Activity\n        __typename\n      }\n      __typename\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment Activity on ActivityFeedItem {\n  accountId\n  aftOriginatorName\n  aftTransactionCategory\n  aftTransactionType\n  amount\n  amountSign\n  assetQuantity\n  assetSymbol\n  canonicalId\n  currency\n  eTransferEmail\n  eTransferName\n  externalCanonicalId\n  identityId\n  institutionName\n  occurredAt\n  p2pHandle\n  p2pMessage\n  spendMerchant\n  securityId\n  billPayCompanyName\n  billPayPayeeNickname\n  redactedExternalAccountNumber\n  opposingAccountId\n  status\n  subType\n  type\n  visible\n  strikePrice\n  contractType\n  expiryDate\n  chequeNumber\n  provisionalCreditAmount\n  primaryBlocker\n  interestRate\n  __typename\n}\n"
+  }
+end
+
+def fetch_spend_transactions_query(accountId:, transactionIds:)
+  {
+    "operationName": "FetchSpendTransactions",
+    "query": "query FetchSpendTransactions($transactionIds: [String!], $accountId: String!) {\n  spendTransactions(transactionIds: $transactionIds, accountId: $accountId) {\n    edges {\n      node {\n        ...SpendTransaction\n        __typename\n      }\n      __typename\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment SpendTransaction on SpendTransaction {\n  id\n  hasReward\n  rewardAmount\n  rewardPayoutType\n  rewardPayoutSecurityId\n  rewardPayoutCustodianAccountId\n  foreignAmount\n  foreignCurrency\n  foreignExchangeRate\n  isForeign\n  __typename\n}\n",
+    "variables": {
+      "accountId": accountId,
+      "transactionIds": transactionIds # [ "", "" ]
+    }
+  }
+end
+
+def CashPendingBalance_query(accountId:)
+  {
+    "operationName": "CashPendingBalance",
+    "query": "query CashPendingBalance($accountId: ID) {\n  cashAccount(id: $accountId) {\n    id\n    pendingBalance\n    __typename\n  }\n}\n",
+    "variables": {
+        "accountId": accountId
     }
   }
 end
