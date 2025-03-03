@@ -2,6 +2,7 @@ require 'faraday'
 require 'faraday/retry'
 require 'deep_merge'
 require 'yaml'
+require 'pry' if ENV['debug'] == 'true'
 
 require_relative 'native_helper'
 
@@ -90,8 +91,8 @@ class WealthSimpleClient
   end
 
   # Handles GraphQL requests
-  private_methods def handle_request(query:, parameters:, page: nil, offset: nil)
-    new_page = (page || offset) ? "(next page)" : ""
+  private_methods def handle_request(query:, parameters:, page: nil, offset: nil, graphql_headers: nil)
+    new_page = (page || offset) ? "(next page: #{page || offset})" : ""
     puts "Retrieving #{query} #{new_page}"
 
     # since the query methods is passed dynamically, we want to be sure it really exists or return an error straight away
@@ -102,10 +103,13 @@ class WealthSimpleClient
 
     # send the GQL query
     response = @graphql_client.post('/graphql') do |req|
+      # update headers, if necessary
+      req.headers = req.headers.deep_merge(graphql_headers) if graphql_headers
+
       # add page token if necessary, there are two tokens and three different names because there are two separate implementations with different variables
       if page
-        if query == 'fetch_activity_list_query'
-          # only 'fetch_activity_list_query' uses cursor as variable
+        if ['fetch_activity_list_query', 'fetch_activity_feed_items_query'].include?(query)
+          # only some pages use cursor as variable
           body[:variables][:cursor] = page
         else
           # all the other APIs with the cursor use 'after'
@@ -163,10 +167,14 @@ class WealthSimpleClient
 
   # Retrieves all the data related to the cash account
   private_methods def get_data
-    # we don't need to retrieve the balance but probably the user doesn't know their internal cash account ID, this helps retrieving it programmatically
+    # TODO: now WS supports multiple accounts, we can use fetch_all_account_financials_query to find it but we require the IdentityId
+    cash_account = ENV['preferred_account']
+
     submit_query = {
       query: 'cash_account_balance_query',
-      parameters: {}
+      parameters: {
+        accountId: cash_account
+      }
     }
     cash_account_balance = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
     cash_account = cash_account_balance['id']
@@ -195,7 +203,7 @@ class WealthSimpleClient
       }
     }
     list_withdrawals_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
-        
+
     # submit_query = {
     #   query: 'list_pending_internal_transfers_for_account_query',
     #   parameters: {
@@ -203,7 +211,7 @@ class WealthSimpleClient
     #   }
     # }
     # list_pending_internal_transfers_for_account = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
-        
+
     # submit_query = {
     #   query: 'cross_product_account_details_query',
     #   parameters: {
@@ -243,14 +251,26 @@ class WealthSimpleClient
     }
     fetch_interest_payout_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
+    # submit_query = {
+    #   query: 'fetch_activity_list_query',
+    #   parameters: {
+    #     accountIds: [cash_account],
+    #     endDate: Time.now.utc.strftime('%FT%T.%LZ')
+    #   }
+    # }
+    # fetch_activity_list_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
+
     submit_query = {
-      query: 'fetch_activity_list_query',
+      query: 'fetch_activity_feed_items_query',
       parameters: {
         accountIds: [cash_account],
         endDate: Time.now.utc.strftime('%FT%T.%LZ')
+      },
+      graphql_headers: {
+        'x-ws-profile': 'trade'
       }
     }
-    fetch_activity_list_query = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
+    fetch_activity_feed_items = handle_request(query: submit_query[:query], parameters: submit_query[:parameters])
 
     # returning results using the old rocket syntax to maintain compatibility with cache and consistency with the rest of the content
     {
@@ -264,7 +284,8 @@ class WealthSimpleClient
       'search_funding_intents' => search_funding_intents_query,
       'fetch_interest_payout' => fetch_interest_payout_query,
       'payments' => payments,
-      'fetch_activity_list' => fetch_activity_list_query
+      # 'fetch_activity_list' => fetch_activity_list_query,
+      'fetch_activity_feed_items' => fetch_activity_feed_items
     }
   end
 
@@ -292,7 +313,8 @@ class WealthSimpleClient
     nodes += data_hash.dig('search_funding_intents')&.dig('edges')&.map                                                   { |item| search_funding_intents_query_process(item: item.dig('node')) }.reverse
     nodes += data_hash.dig('fetch_interest_payout')&.dig('paginatedActivities')&.dig('results')&.map                      { |item| fetch_interest_payout_query_process(item: item) }.reverse # this is fetch_interest_payout_query but returns data under 'account'
     nodes += data_hash.dig('payments')&.dig('nodes')&.map                                                                 { |item| payments_process(item: item) }.reverse
-    nodes += data_hash.dig('fetch_activity_list')&.dig('edges')&.map                                                      { |item| fetch_activity_list_query_process(item: item.dig('node')) }.reverse
+    # nodes += data_hash.dig('fetch_activity_list')&.dig('edges')&.map                                                      { |item| fetch_activity_list_query_process(item: item.dig('node')) }.reverse
+    nodes += data_hash.dig('fetch_activity_feed_items')&.dig('edges')&.map                                                { |item| fetch_activity_list_query_process(item: item.dig('node')) }.reverse
 
     # TODO: We should add this check directly in the items processing AND stop the API fetch pagination once we pass the cutoff
     nodes.map! { |node| (Date.parse(node[:alternative_date].to_s) >= FETCH_ACTIVITY_LIST_API_CUT_OFF_DAY) && node[:source_api] == 'fetch_activity_list_query' ? node : (Date.parse(node[:alternative_date].to_s) < FETCH_ACTIVITY_LIST_API_CUT_OFF_DAY) && node[:source_api] != 'fetch_activity_list_query' ? node : nil }
@@ -304,7 +326,7 @@ class WealthSimpleClient
     columns = nodes.map { |item| item.transform_keys(&:to_s).keys }.flatten.uniq
     # this is used to add the totals at the bottom of the CSV data export
     index_for_alternative_amount = columns.find_index('alternative_amount')
-    
+
     # prepare spreadsheet(s). We are going to generate a CSV for import/export use and an Excel file for human consultation
     require 'csv'
     require 'rubyXL'

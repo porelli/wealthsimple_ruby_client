@@ -144,10 +144,10 @@ def spend_transactions_process(item:)
     transaction.merge!({
       export_id: "#{source_api}_#{id}",
       export_date: export_date,
-      export_description: merchant_name.empty? ? 'Missing description. Refund?' : merchant_name, # refunds do not have a description or anything to make them identifiable
+      export_description: (merchant_name.nil? || merchant_name.empty?) ? 'Missing description. Refund?' : merchant_name, # refunds do not have a description or anything to make them identifiable
       export_amount: export_amount
     })
-  
+
     # if the transaction has cashback in the account itself (for example instead of TSFA or crypto), it won't show a separate transaction (!!!). We need to create a new one!
     if reward_payout_custodian_account_type&.start_with?('ca_cash_')
       transaction = [
@@ -329,6 +329,12 @@ def fetch_activity_list_query_process(item:)
                             end
   alternative_description = default_description if alternative_description.nil? || alternative_description&.empty?
 
+  # if transaction was rejected, we don't want to consider it in our grand balance
+  if ['sm_rejected'].include?(status)
+    alternative_description += " (rejected: #{alternative_amount})"
+    alternative_amount = 0.to_f
+  end
+
   output = {
     source_api: source_api,
     id: id,
@@ -372,7 +378,7 @@ def fetch_activity_list_query_process(item:)
     type: type,
     visible: item['visible']
   }
-  
+
   # unless the transaction is not settled yet
   unless ['authorized'].include?(status)
     output.merge!({
