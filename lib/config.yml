@@ -24,6 +24,6 @@ graphql_headers:
 common_headers:
   x-platform-os: 'android'
   x-platform-version: '29'
-  x-app-version: '2.120.0'
-  x-app-build-number: '10619'
-  user-agent: 'Wealthsimple Trade android v2.120.0 (10619)'
+  x-app-version: '2.169.0'
+  x-app-build-number: '13931'
+  user-agent: 'Wealthsimple Trade android v2.169.0 (13931)'
